@@ -3,6 +3,7 @@ use burn::tensor::Tensor;
 
 type Backend = Wgpu;
 
+mod embed;
 mod layernorm;
 
 fn main() {
