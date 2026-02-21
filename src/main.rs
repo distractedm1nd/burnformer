@@ -6,6 +6,7 @@ type Backend = Wgpu;
 mod attention;
 mod embed;
 mod layernorm;
+mod mlp;
 
 fn main() {
     let device = Default::default();
