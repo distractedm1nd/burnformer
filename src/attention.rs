@@ -5,6 +5,8 @@ use burn::{
     tensor::{activation::softmax, bf16},
 };
 
+use crate::config::TransformerConfig;
+
 pub struct AttentionConfig {
     d_model: usize,
 
@@ -12,6 +14,17 @@ pub struct AttentionConfig {
     d_head: usize,
 
     init_range: f64,
+}
+
+impl From<TransformerConfig> for AttentionConfig {
+    fn from(value: TransformerConfig) -> Self {
+        Self {
+            d_model: value.d_model(),
+            n_head: value.n_head(),
+            d_head: value.d_head(),
+            init_range: value.init_range(),
+        }
+    }
 }
 
 impl AttentionConfig {

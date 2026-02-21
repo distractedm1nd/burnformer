@@ -1,5 +1,7 @@
 use burn::{module::Param, nn::Initializer, prelude::*};
 
+use crate::config::TransformerConfig;
+
 pub struct LayerNormConfig {
     d_model: usize,
     eps: f32,
@@ -8,6 +10,14 @@ pub struct LayerNormConfig {
 impl LayerNormConfig {
     pub fn init<B: Backend>(&self, device: &B::Device) -> LayerNorm<B> {
         LayerNorm::init(self, device)
+    }
+}
+
+impl From<TransformerConfig> for LayerNormConfig {
+    fn from(value: TransformerConfig) -> Self {
+        let d_model = value.d_model();
+        let eps = value.layernorm_eps();
+        LayerNormConfig { d_model, eps }
     }
 }
 

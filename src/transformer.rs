@@ -2,6 +2,7 @@ use burn::prelude::*;
 
 use crate::{
     attention::{Attention, AttentionConfig},
+    config::TransformerConfig,
     layernorm::{LayerNorm, LayerNormConfig},
     mlp::{MLP, MLPConfig},
 };
@@ -10,6 +11,16 @@ pub struct TransformerBlockConfig {
     attn_cfg: AttentionConfig,
     ln_cfg: LayerNormConfig,
     mlp_cfg: MLPConfig,
+}
+
+impl From<TransformerConfig> for TransformerBlockConfig {
+    fn from(cfg: TransformerConfig) -> Self {
+        Self {
+            attn_cfg: cfg.clone().into(),
+            ln_cfg: cfg.clone().into(),
+            mlp_cfg: cfg.into(),
+        }
+    }
 }
 
 pub struct TransformerBlock<B: Backend> {

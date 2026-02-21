@@ -1,5 +1,7 @@
 use burn::{module::Param, nn::Initializer, prelude::*, tensor::activation::gelu};
 
+use crate::config::TransformerConfig;
+
 pub struct MLPConfig {
     pub d_mlp: usize,
     pub d_model: usize,
@@ -9,6 +11,16 @@ pub struct MLPConfig {
 impl MLPConfig {
     pub fn init<B: Backend>(&self, device: &B::Device) -> MLP<B> {
         MLP::init(self, device)
+    }
+}
+
+impl From<TransformerConfig> for MLPConfig {
+    fn from(cfg: TransformerConfig) -> Self {
+        Self {
+            d_mlp: cfg.d_mlp(),
+            d_model: cfg.d_model(),
+            init_range: cfg.init_range(),
+        }
     }
 }
 

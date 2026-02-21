@@ -1,10 +1,23 @@
 use burn::{module::Param, nn::Initializer, prelude::*};
 
+use crate::config::TransformerConfig;
+
 pub struct EmbedConfig {
     d_vocab: usize,
     d_model: usize,
     n_ctx: usize,
     init_range: f64,
+}
+
+impl From<TransformerConfig> for EmbedConfig {
+    fn from(value: TransformerConfig) -> Self {
+        Self {
+            d_vocab: value.d_vocab(),
+            d_model: value.d_model(),
+            n_ctx: value.n_ctx(),
+            init_range: value.init_range(),
+        }
+    }
 }
 
 impl EmbedConfig {
