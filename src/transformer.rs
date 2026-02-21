@@ -23,6 +23,13 @@ impl From<TransformerConfig> for TransformerBlockConfig {
     }
 }
 
+impl TransformerBlockConfig {
+    pub fn init<B: Backend>(&self, device: &B::Device) -> TransformerBlock<B> {
+        TransformerBlock::init(self, device)
+    }
+}
+
+#[derive(Debug, Module)]
 pub struct TransformerBlock<B: Backend> {
     ln1: LayerNorm<B>,
     attn: Attention<B>,

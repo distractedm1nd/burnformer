@@ -33,6 +33,7 @@ impl AttentionConfig {
     }
 }
 
+#[derive(Debug, Module)]
 pub struct Attention<B: Backend> {
     /// (w: (n_heads d_model d_head), b: (n_heads d_head))
     q: (Param<Tensor<B, 3>>, Param<Tensor<B, 2>>),
