@@ -4,4 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-burn = { version = "0.20.1", features = ["wgpu"] }
+burn = { version = "0.20.1", features = ["wgpu", "train", "sqlite", "std", "tch"] }
+serde = "1.0.228"
+tokenizers = {version="0.22.2", features = ["hf-hub", "http"]}
