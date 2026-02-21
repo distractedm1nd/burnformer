@@ -84,6 +84,7 @@ impl<B: Backend> PosEmbed<B> {
         let shape = tokens.shape();
         let (batch, seq_length) = (shape[0], shape[1]);
 
+        #[allow(clippy::single_range_in_vec_init)]
         self.w_pos
             .val()
             .slice([0..seq_length])

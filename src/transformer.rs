@@ -4,7 +4,7 @@ use crate::{
     attention::{Attention, AttentionConfig},
     config::TransformerConfig,
     layernorm::{LayerNorm, LayerNormConfig},
-    mlp::{MLP, MLPConfig},
+    mlp::{MLPConfig, MultiLayerPerceptron},
 };
 
 pub struct TransformerBlockConfig {
@@ -34,7 +34,7 @@ pub struct TransformerBlock<B: Backend> {
     ln1: LayerNorm<B>,
     attn: Attention<B>,
     ln2: LayerNorm<B>,
-    mlp: MLP<B>,
+    mlp: MultiLayerPerceptron<B>,
 }
 
 impl<B: Backend> TransformerBlock<B> {

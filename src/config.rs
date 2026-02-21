@@ -1,4 +1,4 @@
-use burn::prelude::{Backend, Config as BurnConfig};
+use burn::prelude::Config as BurnConfig;
 
 #[derive(Debug, BurnConfig)]
 pub struct TransformerConfig {

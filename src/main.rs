@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use burn::module::Module;
 use burn::prelude::*;
 use burn::tensor::Tensor;

@@ -9,8 +9,8 @@ pub struct MLPConfig {
 }
 
 impl MLPConfig {
-    pub fn init<B: Backend>(&self, device: &B::Device) -> MLP<B> {
-        MLP::init(self, device)
+    pub fn init<B: Backend>(&self, device: &B::Device) -> MultiLayerPerceptron<B> {
+        MultiLayerPerceptron::init(self, device)
     }
 }
 
@@ -25,7 +25,7 @@ impl From<TransformerConfig> for MLPConfig {
 }
 
 #[derive(Debug, Module)]
-pub struct MLP<B: Backend> {
+pub struct MultiLayerPerceptron<B: Backend> {
     /// (d_model d_mlp)
     w_in: Param<Tensor<B, 2>>,
     /// (d_mlp d_model)
@@ -36,7 +36,7 @@ pub struct MLP<B: Backend> {
     b_out: Param<Tensor<B, 1>>,
 }
 
-impl<B: Backend> MLP<B> {
+impl<B: Backend> MultiLayerPerceptron<B> {
     pub fn init(cfg: &MLPConfig, device: &B::Device) -> Self {
         let MLPConfig {
             d_mlp,
