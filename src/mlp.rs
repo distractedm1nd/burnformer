@@ -1,7 +1,7 @@
 use burn::{module::Param, prelude::*, tensor::activation::gelu};
 
 #[derive(Debug, Module)]
-struct MLP<B: Backend> {
+pub struct MLP<B: Backend> {
     /// (d_model d_mlp)
     w_in: Param<Tensor<B, 2>>,
     /// (d_mlp d_model)

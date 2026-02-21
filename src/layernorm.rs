@@ -25,7 +25,7 @@ impl<B: Backend> LayerNorm<B> {
         Self { scale, bias, eps }
     }
 
-    /// [`residual`] has shape (batch pos d_model)
+    /// (batch pos d_model) -> (batch pos d_model)
     pub fn forward<const D: usize>(&self, residual: Tensor<B, D>) -> Tensor<B, D> {
         let residual_mean = residual.clone().mean_dim(D - 1);
 

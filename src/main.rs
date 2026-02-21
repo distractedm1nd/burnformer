@@ -7,6 +7,7 @@ mod attention;
 mod embed;
 mod layernorm;
 mod mlp;
+mod transformer;
 
 fn main() {
     let device = Default::default();
