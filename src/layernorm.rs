@@ -1,8 +1,14 @@
 use burn::{module::Param, nn::Initializer, prelude::*};
 
-pub struct Config {
+pub struct LayerNormConfig {
     d_model: usize,
     eps: f32,
+}
+
+impl LayerNormConfig {
+    pub fn init<B: Backend>(&self, device: &B::Device) -> LayerNorm<B> {
+        LayerNorm::init(self, device)
+    }
 }
 
 #[derive(Module, Debug)]
@@ -17,12 +23,16 @@ pub struct LayerNorm<B: Backend> {
 }
 
 impl<B: Backend> LayerNorm<B> {
-    pub fn init(&self, cfg: Config, device: &B::Device) -> Self {
-        let Config { d_model, eps } = cfg;
+    pub fn init(cfg: &LayerNormConfig, device: &B::Device) -> Self {
+        let LayerNormConfig { d_model, eps } = cfg;
         let scale = Initializer::Ones.init([d_model], device);
         let bias = Initializer::Zeros.init([d_model], device);
 
-        Self { scale, bias, eps }
+        Self {
+            scale,
+            bias,
+            eps: *eps,
+        }
     }
 
     /// (batch pos d_model) -> (batch pos d_model)

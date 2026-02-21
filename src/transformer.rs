@@ -1,6 +1,16 @@
 use burn::prelude::*;
 
-use crate::{attention::Attention, layernorm::LayerNorm, mlp::MLP};
+use crate::{
+    attention::{Attention, AttentionConfig},
+    layernorm::{LayerNorm, LayerNormConfig},
+    mlp::{MLP, MLPConfig},
+};
+
+pub struct TransformerBlockConfig {
+    attn_cfg: AttentionConfig,
+    ln_cfg: LayerNormConfig,
+    mlp_cfg: MLPConfig,
+}
 
 pub struct TransformerBlock<B: Backend> {
     ln1: LayerNorm<B>,
@@ -10,6 +20,15 @@ pub struct TransformerBlock<B: Backend> {
 }
 
 impl<B: Backend> TransformerBlock<B> {
+    pub fn init(cfg: &TransformerBlockConfig, device: &B::Device) -> Self {
+        Self {
+            ln1: cfg.ln_cfg.init(device),
+            attn: cfg.attn_cfg.init(device),
+            ln2: cfg.ln_cfg.init(device),
+            mlp: cfg.mlp_cfg.init(device),
+        }
+    }
+
     /// (batch pos d_model) -> (batch pos d_model)
     pub fn forward(&self, resid_pre: Tensor<B, 3>) -> Tensor<B, 3> {
         let post_attention =

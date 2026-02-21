@@ -1,8 +1,24 @@
 use burn::{
     module::Param,
+    nn::Initializer,
     prelude::*,
     tensor::{activation::softmax, bf16},
 };
+
+pub struct AttentionConfig {
+    d_model: usize,
+
+    n_head: usize,
+    d_head: usize,
+
+    init_range: f64,
+}
+
+impl AttentionConfig {
+    pub fn init<B: Backend>(&self, device: &B::Device) -> Attention<B> {
+        Attention::init(self, device)
+    }
+}
 
 pub struct Attention<B: Backend> {
     /// (w: (n_heads d_model d_head), b: (n_heads d_head))
@@ -19,6 +35,61 @@ pub struct Attention<B: Backend> {
 }
 
 impl<B: Backend> Attention<B> {
+    pub fn init(cfg: &AttentionConfig, device: &B::Device) -> Self {
+        let AttentionConfig {
+            d_model,
+            n_head,
+            d_head,
+            init_range,
+        } = cfg;
+
+        // Q
+        let w = Initializer::Normal {
+            mean: 0.0,
+            std: *init_range,
+        }
+        .init([n_head, d_model, d_head], device);
+        let b = Initializer::Zeros.init([n_head, d_head], device);
+        let q = (w, b);
+
+        // K
+        let w = Initializer::Normal {
+            mean: 0.0,
+            std: *init_range,
+        }
+        .init([n_head, d_model, d_head], device);
+        let b = Initializer::Zeros.init([n_head, d_head], device);
+        let k = (w, b);
+
+        // V
+        let w = Initializer::Normal {
+            mean: 0.0,
+            std: *init_range,
+        }
+        .init([n_head, d_model, d_head], device);
+        let b = Initializer::Zeros.init([n_head, d_head], device);
+        let v = (w, b);
+
+        // O
+        let w = Initializer::Normal {
+            mean: 0.0,
+            std: *init_range,
+        }
+        .init([n_head, d_head, d_model], device);
+        let b = Initializer::Zeros.init([d_model], device);
+        let o = (w, b);
+
+        let attn_scale = (*d_head as f64).sqrt();
+
+        Self {
+            q,
+            k,
+            v,
+            o,
+            attn_scale,
+        }
+    }
+
     /// (batch pos d_model) -> (batch pos d_model)
     pub fn forward(&self, normalized_resid_pre: Tensor<B, 3>) -> Tensor<B, 3> {
         // note: arena makes qkv tensors shape (batch pos n_head d_head) but I find this way more intuitive,

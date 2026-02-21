@@ -4,6 +4,7 @@ use burn::tensor::Tensor;
 type Backend = Wgpu;
 
 mod attention;
+mod config;
 mod embed;
 mod layernorm;
 mod mlp;
