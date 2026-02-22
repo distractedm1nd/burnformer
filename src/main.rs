@@ -14,16 +14,15 @@ use burn::tensor::activation::log_softmax;
 use burn::tensor::backend::AutodiffBackend;
 use burn::train::metric::{AccuracyMetric, LossMetric};
 use burn::train::{
-    ClassificationOutput, InferenceStep, Learner, RegressionOutput, SupervisedTraining,
-    TrainOutput, TrainStep,
+    ClassificationOutput, InferenceStep, Learner, SupervisedTraining, TrainOutput, TrainStep,
 };
-use burn::{backend, optim, prelude::*};
 use burn::{
     data::dataset::{Dataset, HuggingfaceDatasetLoader, transform::SamplerDataset},
     module::Module,
 };
+use burn::{optim, prelude::*};
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
-use tokenizers::Token;
 use tokenizers::tokenizer::{Result, Tokenizer};
 
 use crate::{
@@ -108,48 +107,147 @@ impl<B: Backend> DemoTransformer<B> {
 }
 
 #[derive(Debug, Clone)]
-pub struct TinyStoriesBatcher {
-    tokenizer: Tokenizer,
-    n_ctx: usize,
-}
-
-#[derive(Debug, Clone)]
 pub struct TinyStoryBatch<B: Backend> {
     // (batch pos)
     pub tokens: Tensor<B, 2, Int>,
 }
 
-impl<B: Backend> Batcher<B, TinyStory, TinyStoryBatch<B>> for TinyStoriesBatcher {
-    fn batch(&self, items: Vec<TinyStory>, device: &<B as Backend>::Device) -> TinyStoryBatch<B> {
-        let tokens: Vec<u32> = items
-            .iter()
-            .flat_map(|story| {
-                self.tokenizer
-                    .encode(story.text.clone(), true)
-                    .unwrap()
-                    .get_ids()
-                    .to_vec()
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TokenWindow {
+    pub tokens: Vec<u32>,
+}
+
+#[derive(Clone, Debug)]
+pub struct TokenWindowDataset {
+    tokens: Arc<Vec<u32>>,
+    n_ctx: usize,
+}
+
+impl TokenWindowDataset {
+    fn new(tokens: Vec<u32>, n_ctx: usize) -> Self {
+        Self {
+            tokens: Arc::new(tokens),
+            n_ctx,
+        }
+    }
+
+    fn token_count(&self) -> usize {
+        self.tokens.len()
+    }
+}
+
+impl Dataset<TokenWindow> for TokenWindowDataset {
+    fn get(&self, index: usize) -> Option<TokenWindow> {
+        let start = index.checked_mul(self.n_ctx)?;
+        let end = start.checked_add(self.n_ctx)?;
+        if end > self.tokens.len() {
+            return None;
+        }
+
+        Some(TokenWindow {
+            tokens: self.tokens[start..end].to_vec(),
+        })
+    }
+
+    fn len(&self) -> usize {
+        self.tokens.len() / self.n_ctx
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TinyStoriesBatcher {
+    n_ctx: usize,
+}
+
+impl<B: Backend> Batcher<B, TokenWindow, TinyStoryBatch<B>> for TinyStoriesBatcher {
+    fn batch(&self, items: Vec<TokenWindow>, device: &<B as Backend>::Device) -> TinyStoryBatch<B> {
+        let batch: Vec<_> = items
+            .into_iter()
+            .map(|window| {
+                assert_eq!(
+                    window.tokens.len(),
+                    self.n_ctx,
+                    "Found pre-tokenized window with wrong sequence length."
+                );
+                Tensor::<B, 1, Int>::from_data(TensorData::from(window.tokens.as_slice()), device)
             })
             .collect();
 
-        let mut chunks = tokens.chunks_exact(self.n_ctx);
-        let batch: Vec<_> = chunks
-            .by_ref()
-            .map(TensorData::from)
-            .map(|data| Tensor::<B, 1, Int>::from_data(data, device))
-            .collect();
-
-        assert!(
-            !batch.is_empty(),
-            "Batch contained fewer tokens than n_ctx. Reduce n_ctx or increase batch_size."
-        );
-
         let token_batch = Tensor::stack::<2>(batch, 0);
-
         TinyStoryBatch {
             tokens: token_batch,
         }
     }
+}
+
+fn pretokenize_dataset<D: Dataset<TinyStory> + Sync>(
+    dataset: &D,
+    tokenizer: &Tokenizer,
+    n_ctx: usize,
+    split: &str,
+) -> TokenWindowDataset {
+    const STORIES_PER_CHUNK: usize = 512;
+
+    let chunk_ranges: Vec<(usize, usize)> = (0..dataset.len())
+        .step_by(STORIES_PER_CHUNK)
+        .map(|start| {
+            let end = (start + STORIES_PER_CHUNK).min(dataset.len());
+            (start, end)
+        })
+        .collect();
+
+    let mut token_chunks: Vec<(usize, Vec<u32>)> = chunk_ranges
+        .into_par_iter()
+        .map(|(start, end)| {
+            let mut texts = Vec::with_capacity(end - start);
+            for index in start..end {
+                if let Some(story) = dataset.get(index) {
+                    texts.push(story.text);
+                }
+            }
+
+            let encodings = tokenizer.clone().encode_batch(texts, true).unwrap();
+            let total_tokens: usize = encodings
+                .iter()
+                .map(|encoding| encoding.get_ids().len())
+                .sum();
+            let mut tokens = Vec::with_capacity(total_tokens);
+            for encoding in encodings {
+                tokens.extend_from_slice(encoding.get_ids());
+            }
+
+            (start, tokens)
+        })
+        .collect();
+
+    token_chunks.sort_by_key(|(start, _)| *start);
+    let total_tokens: usize = token_chunks.iter().map(|(_, tokens)| tokens.len()).sum();
+    let usable_tokens = total_tokens - (total_tokens % n_ctx);
+    let mut flat_tokens = Vec::with_capacity(usable_tokens);
+
+    for (_, tokens) in token_chunks {
+        if flat_tokens.len() >= usable_tokens {
+            break;
+        }
+        let remaining = usable_tokens - flat_tokens.len();
+        if tokens.len() <= remaining {
+            flat_tokens.extend_from_slice(&tokens);
+        } else {
+            flat_tokens.extend_from_slice(&tokens[..remaining]);
+        }
+    }
+
+    let dataset = TokenWindowDataset::new(flat_tokens, n_ctx);
+    let token_mib =
+        dataset.token_count() as f64 * std::mem::size_of::<u32>() as f64 / 1024.0 / 1024.0;
+    println!(
+        "Pretokenized {split}: {} windows ({} tokens, {:.1} MiB)",
+        dataset.len(),
+        dataset.token_count(),
+        token_mib
+    );
+
+    dataset
 }
 
 fn create_artifact_dir(artifact_dir: &str) {
@@ -186,15 +284,10 @@ pub struct TinyStory {
 pub struct TrainingConfig {
     pub model_cfg: TransformerConfig,
     pub optim: optim::AdamWConfig,
-    // 10
     pub num_epochs: usize,
-    // 32
     pub batch_size: usize,
-    // 500
     pub max_steps_per_epoch: usize,
-    // 1000
     pub eval_examples: usize,
-    // 1e-3
     pub learning_rate: f64,
     pub seed: u64,
 }
@@ -207,12 +300,10 @@ pub fn train<B: AutodiffBackend>(artifact_dir: &str, config: TrainingConfig, dev
 
     B::seed(&device, config.seed);
 
-    let tokenizer = Tokenizer::from_pretrained("bert-base-cased", None).unwrap();
+    let tokenizer = Tokenizer::from_pretrained("openai-community/gpt2", None).unwrap();
 
-    let batcher = TinyStoriesBatcher {
-        tokenizer,
-        n_ctx: config.model_cfg.n_ctx(),
-    };
+    let n_ctx = config.model_cfg.n_ctx();
+    let batcher = TinyStoriesBatcher { n_ctx };
 
     let train: SqliteDataset<TinyStory> = HuggingfaceDatasetLoader::new("roneneldan/TinyStories")
         .dataset("train")
@@ -227,16 +318,21 @@ pub fn train<B: AutodiffBackend>(artifact_dir: &str, config: TrainingConfig, dev
     let eval_examples = config.eval_examples.min(test.len());
     let train = SamplerDataset::without_replacement(train, train_examples_per_epoch);
     let test = SamplerDataset::without_replacement(test, eval_examples);
+    let train = pretokenize_dataset(&train, &tokenizer, n_ctx, "train");
+    let test = pretokenize_dataset(&test, &tokenizer, n_ctx, "validation");
+    let num_workers = 16;
 
     let train_loader: Arc<dyn DataLoader<B, TinyStoryBatch<B>>> =
         DataLoaderBuilder::new(batcher.clone())
             .batch_size(config.batch_size)
-            .num_workers(16)
+            .num_workers(num_workers)
+            .set_device(device.clone())
             .shuffle(config.seed)
             .build(train);
     let test_loader = DataLoaderBuilder::new(batcher)
         .batch_size(config.batch_size)
-        .num_workers(16)
+        .num_workers(num_workers)
+        .set_device(device.clone())
         .shuffle(config.seed)
         .build(test);
 
@@ -289,14 +385,14 @@ fn main() -> Result<()> {
         TrainingConfig {
             model_cfg: cfg,
             num_epochs: 10,
-            batch_size: 32,
+            batch_size: 4,
             max_steps_per_epoch: 500,
             eval_examples: 1000,
             optim: AdamWConfig::new(),
             learning_rate: 1e-3,
             seed: 42,
         },
-        device.clone(),
+        device,
     );
 
     Ok(())

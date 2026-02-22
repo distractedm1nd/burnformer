@@ -5,5 +5,6 @@ edition = "2024"
 
 [dependencies]
 burn = { version = "0.20.1", features = ["wgpu", "train", "sqlite", "std", "tch"] }
+rayon = "1.10.0"
 serde = "1.0.228"
 tokenizers = {version="0.22.2", features = ["hf-hub", "http"]}

@@ -143,7 +143,7 @@ impl<B: Backend> Attention<B> {
         // (batch n_h pos_q d_head) -> (batch pos d_model)
         z.matmul(w_o.val().unsqueeze()) // (b n_h p_q d_m)
             .sum_dim(1) // (b 1 p_q d_m)
-            .squeeze() // (b p_q d_m)
+            .squeeze_dim(1) // (b p_q d_m)
             .add(b_o.val().unsqueeze()) // (b p_q d_m) + (1 1 d_m)
     }
 

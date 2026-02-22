@@ -875,6 +875,7 @@ name = "burnformer"
 version = "0.1.0"
 dependencies = [
  "burn",
+ "rayon",
  "serde",
  "tokenizers",
 ]
